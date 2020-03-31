@@ -1,0 +1,50 @@
+{
+  "name": "react-easy-module",
+  "version": "1.0.0",
+  "description": "Easy making a react module",
+  "main": "build/index.js",
+  "module": "build/index.es.js",
+  "jsnext:main": "build/index.es.js",
+  "scripts": {
+    "build": "rollup -c",
+    "lint": "standard",
+    "format": "prettier-standard --format",
+    "test": "jest --coverage"
+  },
+  "files": [
+    "build"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/vuonghominh/react-easy-module.git"
+  },
+  "author": "Leon Ho",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vuonghominh/react-easy-module/issues"
+  },
+  "homepage": "https://github.com/vuonghominh/react-easy-module#readme",
+  "devDependencies": {
+    "@types/jest": "^25.1.4",
+    "jest": "^25.2.4",
+    "prettier-standard": "^16.2.1",
+    "rollup": "^2.3.1",
+    "rollup-plugin-commonjs": "^10.1.0",
+    "rollup-plugin-node-resolve": "^5.2.0",
+    "rollup-plugin-peer-deps-external": "^2.2.2",
+    "rollup-plugin-typescript2": "^0.27.0",
+    "standard": "^14.3.3",
+    "ts-jest": "^25.3.0",
+    "typescript": "^3.8.3"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node"
+  },
+  "standard": {
+    "ignore": [
+      "node_modules/",
+      "build/"
+    ]
+  }
+}
