@@ -1,12 +1,6 @@
 import { normalize, schema } from "normalizr";
-import { createStore, applyMiddleware, Reducer, combineReducers } from "redux";
-import createSagaMiddleware from "redux-saga";
-import { composeWithDevTools } from "redux-devtools-extension";
-import { createBrowserHistory, History } from "history";
-import { routerMiddleware, push, connectRouter } from "connected-react-router";
-import { persistStore, persistReducer, PersistConfig } from "redux-persist";
-import storage from "redux-persist/lib/storage";
-import { all, take, put, fork, call } from "redux-saga/effects";
+import { push } from "connected-react-router";
+import { take, put, fork, call } from "redux-saga/effects";
 
 const itemSchema = new schema.Entity("items");
 
@@ -213,54 +207,3 @@ export const buildModule = (inputs: IInput[]) => (initState: IState | Function):
     reducer
   }
 }
-
-
-export function* rootSaga(functions: (() => void)[]) {
-  yield all([...functions.map(fn => fork(fn))]);
-}
-
-export function rootReducers(
-  history: History,
-  reducerMap: { [key: string]: () => void }
-): Reducer {
-  return combineReducers({
-    router: connectRouter(history),
-    ...reducerMap
-  });
-}
-
-export function configStore(
-  initialState: any,
-  opts: {
-    persistConfig: PersistConfig<any>,
-    reducer: (_: History) => Reducer,
-    saga: any,
-    debug?: boolean
-  }
-) {
-  const { saga, reducer, debug } = opts;
-  const persistConfig = Object.assign({
-    key: 'root',
-    storage,
-    whitelist: []
-  }, opts.persistConfig);
-  const history = createBrowserHistory();
-  const persistedReducer = persistReducer(persistConfig, reducer(history));
-  const sagaMiddleware = createSagaMiddleware();
-  const middlewares = [routerMiddleware(history), sagaMiddleware];
-  const store = createStore(
-    persistedReducer,
-    initialState,
-    debug
-      ? applyMiddleware(...middlewares)
-      : composeWithDevTools(applyMiddleware(...middlewares))
-  );
-  sagaMiddleware.run(saga);
-  return {
-    store,
-    history,
-    persistor: persistStore(store)
-  };
-};
-
-export const sum = (a: number, b: number): number => a + b
