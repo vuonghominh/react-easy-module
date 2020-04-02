@@ -1,20 +1,20 @@
 import { take, put, fork } from "redux-saga/effects";
 import { push } from "connected-react-router";
+import { AnyAction } from "redux";
 
 export interface IState {
   status?: number
   message?: string
 }
 
-interface IAction {
-  type: string
-  payload: any
-}
-
 const FAILURE_REGEX = /_failure$/i;
 const DO_WIPE_ERROR = "DO_WIPE_ERROR";
 
-export function errorReducer(state: IState = {}, action: IAction) {
+export function doWipeError() {
+  return { type: DO_WIPE_ERROR }
+}
+
+export function errorReducer(state: IState = {}, action: AnyAction): IState {
   switch (action.type) {
     case (action.type.match(FAILURE_REGEX) || {}).input:
       const error = action.payload && action.payload.error;

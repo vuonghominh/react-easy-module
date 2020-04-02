@@ -1,6 +1,9 @@
 import { normalize, schema } from "normalizr";
+import { AnyAction, Reducer } from "redux";
 import { push } from "connected-react-router";
 import { take, put, fork, call } from "redux-saga/effects";
+
+export { doWipeError } from "./middlewares/error";
 
 const itemSchema = new schema.Entity("items");
 
@@ -19,33 +22,32 @@ export interface IState {
   metadata?: { [key: string]: any }
 }
 
-interface IAction {
-  type: string
-  payload: any
+type ActionFn = (payload: any) => AnyAction
+
+type ActionFnMap = {
+  request: ActionFn
+  success: ActionFn
+  failure: ActionFn
+  doThing: ActionFn
 }
 
-interface IActions {
-  request: (payload: any) => IAction
-  success: (payload: any) => IAction
-  failure: (payload: any) => IAction
-  doThing: (payload: any) => IAction
-}
+export type ModuleReducer = (state: IState, payload: any) => IState
 
-interface IModule {
-  reducer: (state: IState, action: IAction) => any
+type ModuleOutput = {
+  reducer: Reducer
   sagas: (() => void)[]
-  actions: { [key: string]: (_: any) => IAction }
+  actions: { [key: string]: ActionFn }
 }
 
-interface IInput {
+type ModuleInput = {
   action: string
-  apiPayload: (_payload: any) => any
-  onRequest?: (state: IState, payload: any) => any
-  onSuccess?: (state: IState, payload: any) => any
-  onFailure?: (state: IState, payload: any) => any
+  apiPayload(payload: any): any
+  onRequest?: ModuleReducer
+  onSuccess?: ModuleReducer
+  onFailure?: ModuleReducer
 }
 
-function buildTypes(action: string): { [key: string]: string } {
+function getActionType(action: string): { [key: string]: string } {
   return {
     request: `${action}_REQUEST`,
     success: `${action}_SUCCESS`,
@@ -54,17 +56,17 @@ function buildTypes(action: string): { [key: string]: string } {
   }
 }
 
-function buildActions(action: string): IActions {
-  const types = buildTypes(action);
+function getActionFnMap(action: string): ActionFnMap {
+  const actionType = getActionType(action);
   return {
-    request: (payload: any) => ({type: types.request, payload}),
-    success: (payload: any) => ({type: types.success, payload}),
-    failure: (payload: any) => ({type: types.failure, payload}),
-    doThing: (payload: any) => ({type: types.doThing, payload})
+    request: (payload: any) => ({type: actionType.request, payload}),
+    success: (payload: any) => ({type: actionType.success, payload}),
+    failure: (payload: any) => ({type: actionType.failure, payload}),
+    doThing: (payload: any) => ({type: actionType.doThing, payload})
   }
 }
 
-function newItemsState(items: {[key: string]: any}, action: IAction): {[key: string]: any} {
+function itemsReducer(items: {[key: string]: any}, action: AnyAction): {[key: string]: any} {
   const state = { ...items };
   switch (action.type) {
     case (action.type.match(/^create_/i) || {}).input:
@@ -84,7 +86,7 @@ function newItemsState(items: {[key: string]: any}, action: IAction): {[key: str
   return state;
 }
 
-function newMetadataState(metadata: {[key: string]: any}, action: IAction): {[key: string]: any} {
+function metadataReducer(metadata: {[key: string]: any}, action: AnyAction): {[key: string]: any} {
   const state = {
     ...metadata,
     ...action.payload.response.metadata
@@ -110,16 +112,16 @@ function newMetadataState(metadata: {[key: string]: any}, action: IAction): {[ke
   return state;
 }
 
-export const buildModule = (inputs: IInput[]) => (initState: IState | Function): IModule => {
+export const moduleOutput = (inputs: ModuleInput[]) => (initState: IState | Function): ModuleOutput => {
   const getInitState = () => ((typeof initState === "function") ? initState() : initState);
-  const reducer = (state: IState = getInitState(), action: IAction) => {
+  const reducer: Reducer = (state: IState = getInitState(), action: AnyAction) => {
     if ((action.type.match(/logout_success/i) || {}).input) {
       return getInitState();
     }
     for (const input of inputs) {
-      const types = buildTypes(input.action);
+      const actionType = getActionType(input.action);
       switch (action.type) {
-        case types.request:
+        case actionType.request:
           return Object.assign(
             {},
             state,
@@ -129,7 +131,7 @@ export const buildModule = (inputs: IInput[]) => (initState: IState | Function):
             input.onRequest && input.onRequest(state, action.payload),
             { isFetching: true }
           )
-        case types.success:
+        case actionType.success:
           return Object.assign(
             {},
             state,
@@ -138,18 +140,18 @@ export const buildModule = (inputs: IInput[]) => (initState: IState | Function):
             : {},
             state.items
             ? {
-              items: newItemsState(state.items, action)
+              items: itemsReducer(state.items, action)
             }
             : {},
             state.metadata
             ? {
-              metadata: newMetadataState(state.metadata, action)
+              metadata: metadataReducer(state.metadata, action)
             }
             : {},
             input.onSuccess && input.onSuccess(state, action.payload),
             { isFetching: false }
           )
-        case types.failure:
+        case actionType.failure:
           return Object.assign(
             {},
             state,
@@ -163,18 +165,18 @@ export const buildModule = (inputs: IInput[]) => (initState: IState | Function):
     }
     return state;
   }
-  const doActions: { [key: string]: (_: any) => IAction } = {};
+  const actions: { [key: string]: (_: any) => AnyAction } = {};
   for (const input of inputs) {
-    const actions = buildActions(input.action);
+    const actionFnMap = getActionFnMap(input.action);
     const key = toCamelKey(`DO_${input.action}`);
-    doActions[key] = actions.doThing;
+    actions[key] = actionFnMap.doThing;
   }
   const sagas = [];
   for (const input of inputs) {
-    const actions = buildActions(input.action);
-    const types = buildTypes(input.action);
+    const actionFnMap = getActionFnMap(input.action);
+    const actionType = getActionType(input.action);
     const fetchData = function*(api: any, params: any, next?: string | Function) {
-      yield put(actions.request({params}));
+      yield put(actionFnMap.request({params}));
       const { response, error } = yield call(api, params);
       if (response) {
         const responseData = {...response};
@@ -183,18 +185,18 @@ export const buildModule = (inputs: IInput[]) => (initState: IState | Function):
           responseData.data = normalized.entities.items;
           responseData.ids = normalized.result;
         }
-        yield put(actions.success({response: responseData, params}));
+        yield put(actionFnMap.success({response: responseData, params}));
         if (next) {
           const nextRoute = (typeof next === "function") ? next(responseData) : next;
           yield put(push(nextRoute));
         }
       } else {
-        yield put(actions.failure({error, params}));
+        yield put(actionFnMap.failure({error, params}));
       }
     }
     const saga = function*() {
       while (true) {
-        const { payload } = yield take(types.doThing);
+        const { payload } = yield take(actionType.doThing);
         const { api, params, next } = input.apiPayload(payload);
         yield fork(fetchData, api, params, next);
       }
@@ -202,7 +204,7 @@ export const buildModule = (inputs: IInput[]) => (initState: IState | Function):
     sagas.push(saga);
   }
   return {
-    actions: doActions,
+    actions,
     sagas,
     reducer
   }
