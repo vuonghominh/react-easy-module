@@ -7,7 +7,7 @@ export { doWipeError } from "./middlewares/error";
 
 const itemSchema = new schema.Entity("items");
 
-const toCamelKey = (key: string) => {
+export const toCamelKey = (key: string) => {
   return key.toLowerCase().replace(/([-_][a-z])/ig, ($1) => {
     return $1.toUpperCase()
       .replace('-', '')
