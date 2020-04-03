@@ -17,10 +17,9 @@ export function doWipeError() {
 export function errorReducer(state: IState = {}, action: AnyAction): IState {
   switch (action.type) {
     case (action.type.match(FAILURE_REGEX) || {}).input:
-      const error = action.payload && action.payload.error;
       return {
-        message: error && error.message,
-        status: error && error.status
+        ...state,
+        ...(action.payload?.error)
       };
     case DO_WIPE_ERROR:
       return {};

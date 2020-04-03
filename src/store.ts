@@ -8,7 +8,7 @@ import storage from "redux-persist/lib/storage";
 import { all, fork } from "redux-saga/effects";
 import { errorReducer, errorSaga } from "./middlewares/error";
 
-export function rootSaga(functions: (() => void)[]) {
+function sagaWatcher(functions: (() => void)[]) {
   return function* () {
     yield all([...functions.map(fn => fork(fn)), fork(errorSaga)]);
   }
@@ -17,12 +17,12 @@ export function rootSaga(functions: (() => void)[]) {
 type OptsType = {
   appName: string
   reducerMap: { [key: string]: (state: any, action: any) => any }
-  saga: any
+  sagas: (() => void)[]
   debug?: boolean
 }
 
 export function configStore( initialState: any, opts: OptsType) {
-  const { appName, saga, reducerMap, debug } = opts;
+  const { appName, sagas, reducerMap, debug } = opts;
   const persistConfig = {
     key: appName,
     storage,
@@ -44,7 +44,7 @@ export function configStore( initialState: any, opts: OptsType) {
       ? composeWithDevTools(applyMiddleware(...middlewares))
       : applyMiddleware(...middlewares)
   );
-  sagaMiddleware.run(saga);
+  sagaMiddleware.run(sagaWatcher(sagas));
   return {
     store,
     history,
