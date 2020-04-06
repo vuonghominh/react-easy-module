@@ -93,11 +93,11 @@ function errorsReducer(errors: {[key: string]: any}, action: AnyAction): {[key: 
   switch (action.type) {
     case (action.type.match(/^create_/i) || {}).input:
       switch (action.type) {
-        case (action.type.match(/^create_.+_request$/i) || {}).input:
-        case (action.type.match(/^create_.+_success$/i) || {}).input:
+        case (action.type.match(/_request$/i) || {}).input:
+        case (action.type.match(/_success$/i) || {}).input:
           delete state.create;
           break;
-        case (action.type.match(/^create_.+_failure$/i) || {}).input:
+        case (action.type.match(/_failure$/i) || {}).input:
           state.create = error;
           break;
       }
@@ -105,12 +105,12 @@ function errorsReducer(errors: {[key: string]: any}, action: AnyAction): {[key: 
     case (action.type.match(/^update_/i) || {}).input:
     case (action.type.match(/^detail_/i) || {}).input:
       switch (action.type) {
-        case (action.type.match(/^create_.+_request$/i) || {}).input:
-        case (action.type.match(/^create_.+_success$/i) || {}).input:
+        case (action.type.match(/_request$/i) || {}).input:
+        case (action.type.match(/_success$/i) || {}).input:
           delete state.create;
           delete state[action.payload.params.id];
           break;
-        case (action.type.match(/^create_.+_failure$/i) || {}).input:
+        case (action.type.match(/_failure$/i) || {}).input:
           state[action.payload.params.id] = error;
           break;
       }
