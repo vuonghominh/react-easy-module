@@ -18,6 +18,7 @@ export const toCamelKey = (key: string) => {
 export interface IState {
   isFetching: boolean
   loaded?: { [key: string]: boolean }
+  errors?: { [key: string]: any[] | string }
   items?: { [key: string]: any }
   metadata?: { [key: string]: any }
 }
@@ -86,6 +87,41 @@ function itemsReducer(items: {[key: string]: any}, action: AnyAction): {[key: st
   return state;
 }
 
+function errorsReducer(errors: {[key: string]: any}, action: AnyAction): {[key: string]: any[] | string} {
+  const state = { ...errors };
+  const error = action.payload.error?.errors || action.payload.error?.message;
+  switch (action.type) {
+    case (action.type.match(/^create_/i) || {}).input:
+      switch (action.type) {
+        case (action.type.match(/^create_.+_request$/i) || {}).input:
+        case (action.type.match(/^create_.+_success$/i) || {}).input:
+          delete state.create;
+          break;
+        case (action.type.match(/^create_.+_failure$/i) || {}).input:
+          state.create = error;
+          break;
+      }
+      break;
+    case (action.type.match(/^update_/i) || {}).input:
+    case (action.type.match(/^detail_/i) || {}).input:
+      switch (action.type) {
+        case (action.type.match(/^create_.+_request$/i) || {}).input:
+        case (action.type.match(/^create_.+_success$/i) || {}).input:
+          delete state.create;
+          delete state[action.payload.params.id];
+          break;
+        case (action.type.match(/^create_.+_failure$/i) || {}).input:
+          state[action.payload.params.id] = error;
+          break;
+      }
+      break;
+    case (action.type.match(/^getall_/i) || {}).input:
+      delete state.create;
+      break;
+  }
+  return state;
+}
+
 function metadataReducer(metadata: {[key: string]: any}, action: AnyAction): {[key: string]: any} {
   const state = {
     ...metadata,
@@ -120,47 +156,59 @@ export const moduleOutput = (inputs: ModuleInput[]) => (initState: IState | Func
     }
     for (const input of inputs) {
       const actionType = getActionType(input.action);
+      let newState;
       switch (action.type) {
         case actionType.request:
-          return Object.assign(
-            {},
-            state,
-            state.loaded && action.payload.params && action.payload.params.id
-            ? { loaded: {...state.loaded, [action.payload.params.id]: false} }
-            : {},
-            input.onRequest && input.onRequest(state, action.payload),
-            { isFetching: true }
-          )
+          newState = {
+            ...state,
+            isFetching: true,
+            ...(state.loaded && action.payload.params && action.payload.params.id && {
+              loaded: {
+                ...state.loaded,
+                [action.payload.params.id]: false
+              }
+            }),
+            ...(state.errors && {
+              errors: errorsReducer(state.errors, action)
+            })
+          }
+          return input.onRequest ? input.onRequest(newState, action.payload) : newState;
         case actionType.success:
-          return Object.assign(
-            {},
-            state,
-            state.loaded && action.payload.params && action.payload.params.id
-            ? { loaded: {...state.loaded, [action.payload.params.id]: true} }
-            : {},
-            state.items
-            ? {
+          newState = {
+            ...state,
+            isFetching: false,
+            ...(state.loaded && action.payload.params && action.payload.params.id && {
+              loaded: {
+                ...state.loaded,
+                [action.payload.params.id]: true
+              }
+            }),
+            ...(state.items && {
               items: itemsReducer(state.items, action)
-            }
-            : {},
-            state.metadata
-            ? {
+            }),
+            ...(state.metadata && {
               metadata: metadataReducer(state.metadata, action)
-            }
-            : {},
-            input.onSuccess && input.onSuccess(state, action.payload),
-            { isFetching: false }
-          )
+            }),
+            ...(state.errors && {
+              errors: errorsReducer(state.errors, action)
+            })
+          }
+          return input.onSuccess ? input.onSuccess(newState, action.payload) : newState;
         case actionType.failure:
-          return Object.assign(
-            {},
-            state,
-            state.loaded && action.payload.params && action.payload.params.id
-            ? { loaded: {...state.loaded, [action.payload.params.id]: true} }
-            : {},
-            input.onFailure && input.onFailure(state, action.payload),
-            { isFetching: false }
-          )
+          newState = {
+            ...state,
+            isFetching: false,
+            ...(state.loaded && action.payload.params && action.payload.params.id && {
+              loaded: {
+                ...state.loaded,
+                [action.payload.params.id]: true
+              }
+            }),
+            ...(state.errors && {
+              errors: errorsReducer(state.errors, action)
+            })
+          }
+          return input.onFailure ? input.onFailure(newState, action.payload) : newState;
       }
     }
     return state;
