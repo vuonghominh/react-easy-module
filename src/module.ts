@@ -3,9 +3,16 @@ import { AnyAction, Reducer } from "redux";
 import { push } from "connected-react-router";
 import { take, put, fork, call } from "redux-saga/effects";
 
-export { doWipeError } from "./middlewares/error";
-
 const itemSchema = new schema.Entity("items");
+
+const CREATE_ACTION_REGEX = /^create_/i;
+const UPDATE_ACTION_REGEX = /^update_/i;
+const DETAIL_ACTION_REGEX = /^detail_/i;
+const DELETE_ACTION_REGEX = /^delete_/i;
+const GETALL_ACTION_REGEX = /^getall_/i;
+const ACTION_REQUEST_REGEX = /_request$/i;
+const ACTION_SUCCESS_REGEX = /_success$/i;
+const ACTION_FAILURE_REGEX = /_failure$/i;
 
 export const toCamelKey = (key: string) => {
   return key.toLowerCase().replace(/([-_][a-z])/ig, ($1) => {
@@ -15,12 +22,18 @@ export const toCamelKey = (key: string) => {
   });
 };
 
-export interface IState {
-  isFetching: boolean
-  loaded?: { [key: string]: boolean }
-  errors?: { [key: string]: any[] | string }
+export interface IModuleState {
+  request: RequestState
   items?: { [key: string]: any }
   metadata?: { [key: string]: any }
+}
+
+type RequestState = {
+  [key: string]: { 
+    isFetching: boolean
+    made?: boolean
+    errors?: any[] | string
+  }
 }
 
 type ActionFn = (payload: any) => AnyAction
@@ -32,7 +45,7 @@ type ActionFnMap = {
   doThing: ActionFn
 }
 
-export type ModuleReducer = (state: IState, payload: any) => IState
+type ModuleReducer = (state: IModuleState, payload: any) => IModuleState
 
 type ModuleOutput = {
   reducer: Reducer
@@ -67,147 +80,115 @@ function getActionFnMap(action: string): ActionFnMap {
   }
 }
 
-function itemsReducer(items: {[key: string]: any}, action: AnyAction): {[key: string]: any} {
-  const state = { ...items };
+function reduceItemsState(state: {[key: string]: any}, action: AnyAction): {[key: string]: any} {
+  const newState = { ...state };
   switch (action.type) {
-    case (action.type.match(/^create_/i) || {}).input:
-      state[action.payload.response.data.id] = action.payload.response.data;
+    case (action.type.match(CREATE_ACTION_REGEX) || {}).input:
+      newState[action.payload.response.data.id] = action.payload.response.data;
       break;
-    case (action.type.match(/^update_/i) || {}).input:
-    case (action.type.match(/^detail_/i) || {}).input:
-      state[action.payload.params.id] = action.payload.response.data;
+    case (action.type.match(UPDATE_ACTION_REGEX) || {}).input:
+    case (action.type.match(DETAIL_ACTION_REGEX) || {}).input:
+      newState[action.payload.params.id] = action.payload.response.data;
       break;
-    case (action.type.match(/^delete_/i) || {}).input:
-      delete state[action.payload.params.id];
+    case (action.type.match(DELETE_ACTION_REGEX) || {}).input:
+      delete newState[action.payload.params.id];
       break;
-    case (action.type.match(/^getall_/i) || {}).input:
-      Object.assign(state, action.payload.response.data);
+    case (action.type.match(GETALL_ACTION_REGEX) || {}).input:
+      Object.assign(newState, action.payload.response.data);
       break;
   }
-  return state;
+  return newState;
 }
 
-function errorsReducer(errors: {[key: string]: any}, action: AnyAction): {[key: string]: any[] | string} {
-  const state = { ...errors };
-  const error = action.payload.error?.errors || action.payload.error?.message;
+function reduceRequestState(state: RequestState, action: AnyAction): RequestState {
+  const newState = { ...state };
+  const errors = action.payload.error?.errors || action.payload.error?.message;
   switch (action.type) {
-    case (action.type.match(/^create_/i) || {}).input:
+    case (action.type.match(CREATE_ACTION_REGEX) || {}).input:
+    case (action.type.match(GETALL_ACTION_REGEX) || {}).input:
+      const actionType = action.type.match(CREATE_ACTION_REGEX)[0].replace(/[^a-zA-Z]+/, '').toLowerCase();
       switch (action.type) {
-        case (action.type.match(/_request$/i) || {}).input:
-        case (action.type.match(/_success$/i) || {}).input:
-          delete state.create;
+        case (action.type.match(ACTION_REQUEST_REGEX) || {}).input:
+          newState[actionType] = { isFetching: true };
           break;
-        case (action.type.match(/_failure$/i) || {}).input:
-          state.create = error;
+        case (action.type.match(ACTION_SUCCESS_REGEX) || {}).input:
+        case (action.type.match(ACTION_FAILURE_REGEX) || {}).input:
+          newState[actionType] = { isFetching: false, errors };
           break;
       }
       break;
-    case (action.type.match(/^update_/i) || {}).input:
-    case (action.type.match(/^detail_/i) || {}).input:
+    case (action.type.match(UPDATE_ACTION_REGEX) || {}).input:
+    case (action.type.match(DETAIL_ACTION_REGEX) || {}).input:
       switch (action.type) {
-        case (action.type.match(/_request$/i) || {}).input:
-        case (action.type.match(/_success$/i) || {}).input:
-          delete state.create;
-          delete state[action.payload.params.id];
+        case (action.type.match(ACTION_REQUEST_REGEX) || {}).input:
+          newState[action.payload.params.id] = {
+            isFetching: true,
+            made: !!newState[action.payload.params.id]?.made
+          };
           break;
-        case (action.type.match(/_failure$/i) || {}).input:
-          state[action.payload.params.id] = error;
+        case (action.type.match(ACTION_SUCCESS_REGEX) || {}).input:
+        case (action.type.match(ACTION_FAILURE_REGEX) || {}).input:
+          newState[action.payload.params.id] = {
+            isFetching: false,
+            made: true,
+            errors
+          };
           break;
       }
       break;
-    case (action.type.match(/^getall_/i) || {}).input:
-      delete state.create;
-      break;
   }
-  return state;
+  return newState;
 }
 
-function metadataReducer(metadata: {[key: string]: any}, action: AnyAction): {[key: string]: any} {
-  const state = {
-    ...metadata,
+function reduceMetadataState(state: {[key: string]: any}, action: AnyAction): {[key: string]: any} {
+  const newState = {
+    ...state,
     ...action.payload.response.metadata
   };
+  if (!Array.isArray(newState.ids)) return newState;
   switch (action.type) {
-    case (action.type.match(/^create_/i) || {}).input:
-      if (Array.isArray(state.ids)) {
-        state.ids.unshift(action.payload.response.data.id);
-      }
+    case (action.type.match(CREATE_ACTION_REGEX) || {}).input:
+      newState.ids.unshift(action.payload.response.data.id);
       break;
-    case (action.type.match(/^delete_/i) || {}).input:
-      if (Array.isArray(state.ids)) {
-        const eIndex = state.ids.indexOf(action.payload.params.id);
-        eIndex > -1 && state.ids.splice(eIndex, 1);
-      }
+    case (action.type.match(DELETE_ACTION_REGEX) || {}).input:
+      const eIndex = newState.ids.indexOf(action.payload.params.id);
+      eIndex > -1 && newState.ids.splice(eIndex, 1);
       break;
-    case (action.type.match(/^getall_/i) || {}).input:
-      if (Array.isArray(state.ids) && action.payload.response.ids) {
-        state.ids = action.payload.response.ids;
-      }
+    case (action.type.match(GETALL_ACTION_REGEX) || {}).input:
+      newState.ids = action.payload.response.ids;
       break;
   }
-  return state;
+  return newState;
 }
 
-export const moduleOutput = (inputs: ModuleInput[]) => (initState: IState | Function): ModuleOutput => {
-  const getInitState = () => ((typeof initState === "function") ? initState() : initState);
-  const reducer: Reducer = (state: IState = getInitState(), action: AnyAction) => {
-    if ((action.type.match(/logout_success/i) || {}).input) {
-      return getInitState();
+export const moduleOutput = (inputs: ModuleInput[]) => (initState: IModuleState): ModuleOutput => {
+  const reducer: Reducer = (state: IModuleState = initState, action: AnyAction) => {
+    if ((action.type.match(/wipe_all_state/i) || {}).input) {
+      return initState;
     }
     for (const input of inputs) {
       const actionType = getActionType(input.action);
-      let newState;
+      if (
+        action.type !== actionType.request &&
+        action.type !== actionType.success &&
+        action.type !== actionType.failure
+      ) continue;
+      const newState = {
+        ...state,
+        request: reduceRequestState(state.request, action),
+        ...(state.items && {
+          items: reduceItemsState(state.items, action)
+        }),
+        ...(state.metadata && {
+          metadata: reduceMetadataState(state.metadata, action)
+        })
+      };
       switch (action.type) {
         case actionType.request:
-          newState = {
-            ...state,
-            isFetching: true,
-            ...(state.loaded && action.payload.params && action.payload.params.id && {
-              loaded: {
-                ...state.loaded,
-                [action.payload.params.id]: false
-              }
-            }),
-            ...(state.errors && {
-              errors: errorsReducer(state.errors, action)
-            })
-          }
           return input.onRequest ? input.onRequest(newState, action.payload) : newState;
         case actionType.success:
-          newState = {
-            ...state,
-            isFetching: false,
-            ...(state.loaded && action.payload.params && action.payload.params.id && {
-              loaded: {
-                ...state.loaded,
-                [action.payload.params.id]: true
-              }
-            }),
-            ...(state.items && {
-              items: itemsReducer(state.items, action)
-            }),
-            ...(state.metadata && {
-              metadata: metadataReducer(state.metadata, action)
-            }),
-            ...(state.errors && {
-              errors: errorsReducer(state.errors, action)
-            })
-          }
           return input.onSuccess ? input.onSuccess(newState, action.payload) : newState;
         case actionType.failure:
-          newState = {
-            ...state,
-            isFetching: false,
-            ...(state.loaded && action.payload.params && action.payload.params.id && {
-              loaded: {
-                ...state.loaded,
-                [action.payload.params.id]: true
-              }
-            }),
-            ...(state.errors && {
-              errors: errorsReducer(state.errors, action)
-            })
-          }
           return input.onFailure ? input.onFailure(newState, action.payload) : newState;
       }
     }

@@ -1,53 +1,45 @@
-import { createStore, applyMiddleware, combineReducers } from "redux";
+import { createStore, applyMiddleware, combineReducers, Middleware, Reducer, Store } from "redux";
 import createSagaMiddleware from "redux-saga";
 import { composeWithDevTools } from "redux-devtools-extension";
-import { createBrowserHistory } from "history";
-import { routerMiddleware, connectRouter } from "connected-react-router";
-import { persistStore, persistReducer } from "redux-persist";
-import storage from "redux-persist/lib/storage";
+import { createBrowserHistory, createMemoryHistory, History } from "history";
 import { all, fork } from "redux-saga/effects";
-import { errorReducer, errorSaga } from "./middlewares/error";
+import { connectRouter } from "connected-react-router";
 
 function sagaWatcher(functions: (() => void)[]) {
   return function* () {
-    yield all([...functions.map(fn => fork(fn)), fork(errorSaga)]);
+    yield all(functions.map(fn => fork(fn)));
   }
 }
 
-type OptsType = {
-  appName: string
-  reducerMap: { [key: string]: (state: any, action: any) => any }
-  sagas: (() => void)[]
+type StoreConfig = {
+  state?: any
+  reducer?: { [key: string]: Reducer }
+  sagas?: (() => void)[]
+  middlewares?: Middleware[]
   debug?: boolean
 }
 
-export function configStore( initialState: any, opts: OptsType) {
-  const { appName, sagas, reducerMap, debug } = opts;
-  const persistConfig = {
-    key: appName,
-    storage,
-    whitelist: []
-  };
-  const history = createBrowserHistory();
-  const reducer: any = combineReducers({
-    router: connectRouter(history),
-    error: errorReducer,
-    ...reducerMap
-  });
-  const persistedReducer = persistReducer(persistConfig, reducer);
+export function configStore({
+  state = {},
+  reducer = {},
+  sagas = [],
+  middlewares,
+  debug = false
+}: StoreConfig): {store: Store, history: History } {
+  const isRN = typeof navigator != 'undefined' && navigator.product == 'ReactNative';
+  const history = isRN ? createMemoryHistory() : createBrowserHistory();
   const sagaMiddleware = createSagaMiddleware();
-  const middlewares = [routerMiddleware(history), sagaMiddleware];
+  const appliedMiddleware = applyMiddleware(...(middlewares ? [...middlewares, sagaMiddleware] : [sagaMiddleware]));
   const store = createStore(
-    persistedReducer,
-    initialState,
+    combineReducers({ ...reducer, router: connectRouter(history) as any }),
+    state,
     debug
-      ? composeWithDevTools(applyMiddleware(...middlewares))
-      : applyMiddleware(...middlewares)
+      ? composeWithDevTools(appliedMiddleware)
+      : appliedMiddleware
   );
   sagaMiddleware.run(sagaWatcher(sagas));
   return {
     store,
-    history,
-    persistor: persistStore(store)
-  };
+    history
+  }
 };
