@@ -81,6 +81,9 @@ function getActionFnMap(action: string): ActionFnMap {
 }
 
 function reduceItemsState(state: {[key: string]: any}, action: AnyAction): {[key: string]: any} {
+  if (!action.type.match(ACTION_SUCCESS_REGEX)) {
+    return state;
+  }
   const newState = { ...state };
   switch (action.type) {
     case (action.type.match(CREATE_ACTION_REGEX) || {}).input:
@@ -141,6 +144,9 @@ function reduceRequestState(state: RequestState, action: AnyAction): RequestStat
 }
 
 function reduceMetadataState(state: {[key: string]: any}, action: AnyAction): {[key: string]: any} {
+  if (!action.type.match(ACTION_SUCCESS_REGEX)) {
+    return state;
+  }
   const newState = {
     ...state,
     ...action.payload.response.metadata

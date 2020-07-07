@@ -1,6 +1,6 @@
 {
   "name": "react-easy-module",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "Easy making a react module",
   "main": "es/index.js",
   "module": "es/index.esm.js",
