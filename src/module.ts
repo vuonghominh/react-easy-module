@@ -109,7 +109,7 @@ function reduceRequestState(state: RequestState, action: AnyAction): RequestStat
   switch (action.type) {
     case (action.type.match(CREATE_ACTION_REGEX) || {}).input:
     case (action.type.match(GETALL_ACTION_REGEX) || {}).input:
-      const actionType = action.type.match(CREATE_ACTION_REGEX)[0].replace(/[^a-zA-Z]+/, '').toLowerCase();
+      const actionType = action.type.split('_')[0].replace(/[^a-zA-Z]+/, '').toLowerCase();
       switch (action.type) {
         case (action.type.match(ACTION_REQUEST_REGEX) || {}).input:
           newState[actionType] = { isFetching: true };
