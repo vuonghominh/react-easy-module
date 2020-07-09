@@ -3,7 +3,7 @@ import createSagaMiddleware from "redux-saga";
 import { composeWithDevTools } from "redux-devtools-extension";
 import { createBrowserHistory, createMemoryHistory, History } from "history";
 import { all, fork } from "redux-saga/effects";
-import { connectRouter } from "connected-react-router";
+import { connectRouter, routerMiddleware } from "connected-react-router";
 
 function sagaWatcher(functions: (() => void)[]) {
   return function* () {
@@ -29,7 +29,11 @@ export function configStore({
   const isRN = typeof navigator != 'undefined' && navigator.product == 'ReactNative';
   const history = isRN ? createMemoryHistory() : createBrowserHistory();
   const sagaMiddleware = createSagaMiddleware();
-  const appliedMiddleware = applyMiddleware(...(middlewares ? [...middlewares, sagaMiddleware] : [sagaMiddleware]));
+  const storeMiddlewares = [sagaMiddleware, routerMiddleware(history)];
+  if (middlewares) {
+    storeMiddlewares.push(...middlewares)
+  }
+  const appliedMiddleware = applyMiddleware(...storeMiddlewares);
   const store = createStore(
     combineReducers({ ...reducer, router: connectRouter(history) as any }),
     state,
