@@ -107,19 +107,6 @@ function reduceRequestState(state: RequestState, action: AnyAction): RequestStat
   const newState = { ...state };
   const errors = action.payload.error?.errors || action.payload.error?.message;
   switch (action.type) {
-    case (action.type.match(CREATE_ACTION_REGEX) || {}).input:
-    case (action.type.match(GETALL_ACTION_REGEX) || {}).input:
-      const actionType = action.type.split('_')[0].replace(/[^a-zA-Z]+/, '').toLowerCase();
-      switch (action.type) {
-        case (action.type.match(ACTION_REQUEST_REGEX) || {}).input:
-          newState[actionType] = { isFetching: true };
-          break;
-        case (action.type.match(ACTION_SUCCESS_REGEX) || {}).input:
-        case (action.type.match(ACTION_FAILURE_REGEX) || {}).input:
-          newState[actionType] = { isFetching: false, errors };
-          break;
-      }
-      break;
     case (action.type.match(UPDATE_ACTION_REGEX) || {}).input:
     case (action.type.match(DETAIL_ACTION_REGEX) || {}).input:
       switch (action.type) {
@@ -136,6 +123,18 @@ function reduceRequestState(state: RequestState, action: AnyAction): RequestStat
             made: true,
             errors
           };
+          break;
+      }
+      break;
+    default:
+      const actionType = action.type.split('_')[0].replace(/[^a-zA-Z]+/, '').toLowerCase();
+      switch (action.type) {
+        case (action.type.match(ACTION_REQUEST_REGEX) || {}).input:
+          newState[actionType] = { isFetching: true };
+          break;
+        case (action.type.match(ACTION_SUCCESS_REGEX) || {}).input:
+        case (action.type.match(ACTION_FAILURE_REGEX) || {}).input:
+          newState[actionType] = { isFetching: false, errors };
           break;
       }
       break;
